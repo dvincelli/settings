@@ -11,13 +11,21 @@ class Field(object):
 
     def __set__(self, instance, value):
         value = self.parser(value)
-        setattr(self, '_value', value)
+        setattr(instance, self.name, value)
 
     def __get__(self, instance, cls):
-        return getattr(self, '_value', self.default)
+        return getattr(instance, self.name, self.default)
 
     def __delete__(self, instance):
-        del self._value
+        delattr(instance, self.name, self.default)
+
+    @property
+    def name(self):
+        return self._name
+
+    @name.setter
+    def name(self, value):
+        self._name = '_%s_value' % value
 
 
 class Boolean(Field):
@@ -143,8 +151,25 @@ class DictAccessMixin(object):
         return delattr(self, item)
 
 
+class SectionMeta(type):
+
+    def __new__(mcs, name, bases, dict):
+        instance = type.__new__(mcs, name, bases, dict)
+        fields = {}
+        for name, item in dict.iteritems():
+            try:
+                if isinstance(item, Field):
+                    fields[name] = item
+                    item.name = name
+            except TypeError:  # item is not a type
+                pass
+        instance.fields = fields
+        return instance
+
+
 class Section(DictAccessMixin):
-    pass
+
+    __metaclass__ = SectionMeta
 
 
 class Settings(DictAccessMixin):
@@ -180,10 +205,6 @@ if __name__ == '__main__':
 
     class FunnelingSettings(Settings):
 
-        field1 = Unicode()
-        fieldx = Integer()
-        fieldb = Boolean()
-
         class settings(Section):
             field1 = Unicode()
             field2 = Float()
@@ -196,17 +217,11 @@ if __name__ == '__main__':
 
     settings = FunnelingSettings()
 
-    settings.field1 = 1
-    assert settings.field1 == '1'
-    settings.fieldx = '4'
-    assert settings.fieldx == 4
-
-    settings.fieldb = '1'
-    assert settings.fieldb == True
-
+    # unicode
     settings.settings.field1 = 4
     assert settings.settings.field1 == '4'
 
+    # floats
     settings.settings.field2 = 45
     assert settings.settings.field2 == 45.0
     settings.settings.field2 = '41.0'
@@ -217,9 +232,11 @@ if __name__ == '__main__':
     settings.settings.field3 = '70'
     assert settings.settings.field3 == 70
 
+    # two instances
     settings2 = FunnelingSettings()
     settings2.settings.field2 = 12
     assert settings2.settings.field2 == 12.0
+    assert settings.settings.field2 == 41.0
 
     # lists
     settings2.settings.field4 = 'foo,bar,baz'
@@ -232,11 +249,12 @@ if __name__ == '__main__':
     # dictionary access
     assert settings2['settings']['field5'] == settings2.settings.field5
 
-    # whitespace
+    # whitespace fundamentals (WIP)
     setattr(settings2.settings, 'Miow Miow', 'Monkey Bot')
     assert settings2['settings']['Miow Miow'] == 'Monkey Bot'
     assert getattr(settings2['settings'], 'Miow Miow') == 'Monkey Bot'
 
+    # exercise the parser function
     class MoreTests(Settings):
 
         class settings(Section):
@@ -247,6 +265,9 @@ if __name__ == '__main__':
             keypair_of_lists = KeyPair(List())
             some_dict_thing = PythonLiteral()
             a_long = Long()
+
+        class extra(Section):
+            pass
 
     from StringIO import StringIO
     foo = StringIO('''
@@ -260,13 +281,21 @@ lines=23.3
 keypair_of_lists=k:x,y,z
 some_dict_thing={'foo': 1, 2: [1, 2, 3]}
 a_long=12345678901234567890
+
+[extra]
+What Up=dog
 ''')
     settings = MoreTests.parse(foo)
     assert settings.settings.field1 == 'foo'
     assert settings.settings.integer == -23423
     assert settings.settings.floatz == 423.2
     assert settings.settings.lines == [23.3, 32.3, 42.0]
+    # strange combo
     assert settings.settings.keypair_of_lists == ('k', ['x', 'y', 'z'])
-
+    # python literral syntax
     assert settings.settings.some_dict_thing == {'foo': 1, 2: [1, 2, 3]}
+    # python long
     assert settings.settings.a_long == 12345678901234567890L
+
+    print dir(settings.extra)
+    assert settings.extra['what up'] == 'dog'
