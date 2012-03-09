@@ -78,7 +78,7 @@ class Unicode(Field):
 
 class KeyPair(Field):
 
-    def keypair_parser(self, value):
+    def parser(self, value):
         k, v = value.split(self.delimiter)
         v = self.field_type.parser(v)
         return (k, v)
@@ -91,7 +91,7 @@ class KeyPair(Field):
         self.field_type = field_type
         self.delimiter = delimiter
         super(KeyPair, self).__init__(
-                parser=self.keypair_parser,
+                parser=self.parser,
                 **kwargs
             )
 
