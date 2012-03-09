@@ -297,5 +297,5 @@ What Up=dog
     # python long
     assert settings.settings.a_long == 12345678901234567890L
 
-    print dir(settings.extra)
+    # trying out extra fields that aren't defined
     assert settings.extra['what up'] == 'dog'
