@@ -5,7 +5,6 @@ import weakref
 
 class Item(object):
 
-
     def __init__(self, parser=unicode, default=None, required=False):
         self.parser = parser
         self.default = default
@@ -78,17 +77,10 @@ class KeyPair(Item):
         v = self.item_type.parser(v)
         return (k, v)
 
-    def __init__(self,
-            item_type=Unicode(),
-            delimiter=':',
-            **kwargs
-        ):
+    def __init__(self, item_type=Unicode(), delimiter=':', **kwargs):
         self.item_type = item_type
         self.delimiter = delimiter
-        super(KeyPair, self).__init__(
-                parser=self.parser,
-                **kwargs
-            )
+        super(KeyPair, self).__init__(parser=self.parser, **kwargs)
 
 
 class List(Item):
@@ -214,132 +206,7 @@ class Settings(DictAccessMixin):
             for iname, item in section.get_required_items():
                 if iname not in dict(parser.items(sname)):
                     raise ValueError(
-                        "Required item %r missing from section %r in ini file" % (iname, sname)
+                        "Required item %r missing from section %r in ini file"\
+                                % (iname, sname)
                     )
         return settings
-
-
-
-if __name__ == '__main__':
-
-    class FunnelingSettings(Settings):
-
-        class settings(Section):
-            item1 = Unicode()
-            item2 = Float()
-            item3 = Integer(default=5)
-            item4 = List(Unicode())
-            item5 = List(KeyPair())
-
-        class extra(Section):
-            item = Integer()
-
-    settings = FunnelingSettings()
-
-    # unicode
-    settings.settings.item1 = 4
-    assert settings.settings.item1 == '4'
-
-    # floats
-    settings.settings.item2 = 45
-    assert settings.settings.item2 == 45.0
-    settings.settings.item2 = '41.0'
-    assert settings.settings.item2 == 41.0
-
-    # default
-    assert settings.settings.item3 == 5
-    settings.settings.item3 = '70'
-    assert settings.settings.item3 == 70
-
-    # two instances
-    settings2 = FunnelingSettings()
-    settings2.settings.item2 = 12
-    assert settings2.settings.item2 == 12.0
-    assert settings.settings.item2 == 41.0
-
-    # lists
-    settings2.settings.item4 = 'foo,bar,baz'
-    assert settings2.settings.item4 == ['foo', 'bar', 'baz']
-
-    # list of keypairs
-    settings2.settings.item5 = 'foo:bar,baz:quux'
-    assert settings2.settings.item5 == [('foo', 'bar'), ('baz', 'quux')]
-
-    # dictionary access
-    assert settings2['settings']['item5'] == settings2.settings.item5
-
-    # whitespace fundamentals (WIP)
-    setattr(settings2.settings, 'Miow Miow', 'Monkey Bot')
-    assert settings2['settings']['Miow Miow'] == 'Monkey Bot'
-    assert getattr(settings2['settings'], 'Miow Miow') == 'Monkey Bot'
-
-    # exercise the parser function
-    class MoreTests(Settings):
-
-        class settings(Section):
-            item1 = Unicode()
-            integer = Integer()
-            floatz = Float()
-            lines = List(Float(), multiline=True)
-            keypair_of_lists = KeyPair(List())
-            some_dict_thing = PythonLiteral()
-            a_long = Long()
-
-        class extra(Section):
-            pass
-
-    from StringIO import StringIO
-    foo = StringIO('''
-[settings]
-item1=foo
-integer=-23423
-floatz=423.2
-lines=23.3
-    32.3
-    42
-keypair_of_lists=k:x,y,z
-some_dict_thing={'foo': 1, 2: [1, 2, 3]}
-a_long=12345678901234567890
-
-[extra]
-What Up=dog
-
-[undeclared]
-what=huh?
-''')
-    settings = MoreTests.parse(foo)
-    assert settings.settings.item1 == 'foo'
-    assert settings.settings.integer == -23423
-    assert settings.settings.floatz == 423.2
-    assert settings.settings.lines == [23.3, 32.3, 42.0]
-    # strange combo
-    assert settings.settings.keypair_of_lists == ('k', ['x', 'y', 'z'])
-    # python literral syntax
-    assert settings.settings.some_dict_thing == {'foo': 1, 2: [1, 2, 3]}
-    # python long
-    assert settings.settings.a_long == 12345678901234567890L
-
-    # trying out extra items that aren't defined
-    assert settings.extra['what up'] == 'dog'
-
-    # entirely undefined sections
-    assert settings.undeclared.what == 'huh?'
-
-    # required should blow up
-    class Required(Settings):
-
-        class settings(Section):
-            required = Unicode(required=True)
-            missing = Unicode()
-            provided = Unicode()
-
-    foo = StringIO('''
-[settings]
-provided = foo
-''')
-    try:
-        settings = Required.parse(foo)
-        assert False
-    except ValueError as e:
-        assert str(e) == "Required item 'required' missing from section 'settings' in ini file"
-
