@@ -102,12 +102,17 @@ class List(Field):
             field_type=Unicode(),
             seperator=',',
             multiline=False,
-            strip=True
+            strip=True,
+            **kwargs
         ):
         self.field_type = field_type
         self.seperator = seperator
         self.multiline = multiline
         self.strip = strip
+        super(List, self).__init__(
+                parser=self.parser,
+                **kwargs
+            )
 
     def parser(self, value):
         if self.multiline:
@@ -171,6 +176,11 @@ class Section(DictAccessMixin):
 
     __metaclass__ = SectionMeta
 
+    def get_required_fields(self):
+        for name, field in self.fields.iteritems():
+            if field.required:
+                yield name, field
+
 
 class Settings(DictAccessMixin):
 
@@ -190,6 +200,11 @@ class Settings(DictAccessMixin):
         setattr(self, name, Section())
         return getattr(self, name)
 
+    def get_sections(self):
+        for name, section in vars(self).iteritems():
+            if isinstance(section, Section):
+                yield name, section
+
     @classmethod
     def parse(cls, file):
         if isinstance(file, basestring):
@@ -204,6 +219,12 @@ class Settings(DictAccessMixin):
                 dest = settings.add_section(section)
             for (name, value) in parser.items(section):
                 setattr(dest, name, value)
+        for sname, section in settings.get_sections():
+            for fname, field in section.get_required_fields():
+                if fname not in dict(parser.items(sname)):
+                    raise ValueError(
+                        "Required field %r missing from section %r in ini file" % (fname, sname)
+                    )
         return settings
 
 
@@ -312,3 +333,22 @@ what=huh?
 
     # entirely undefined sections
     assert settings.undeclared.what == 'huh?'
+
+    # required should blow up
+    class Required(Settings):
+
+        class settings(Section):
+            required = Unicode(required=True)
+            missing = Unicode()
+            provided = Unicode()
+
+    foo = StringIO('''
+[settings]
+provided = foo
+''')
+    try:
+        settings = Required.parse(foo)
+        assert False
+    except ValueError as e:
+        assert str(e) == "Required field 'required' missing from section 'settings' in ini file"
+
