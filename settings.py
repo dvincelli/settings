@@ -1,34 +1,29 @@
 from ConfigParser import SafeConfigParser
 import ast
+import weakref
 
 
-class Field(object):
+class Item(object):
+
 
     def __init__(self, parser=unicode, default=None, required=False):
         self.parser = parser
         self.default = default
         self.required = required
+        self.registry = weakref.WeakKeyDictionary()
 
     def __set__(self, instance, value):
         value = self.parser(value)
-        setattr(instance, self.name, value)
+        self.registry[instance] = value
 
     def __get__(self, instance, cls):
-        return getattr(instance, self.name, self.default)
+        return self.registry.get(instance, self.default)
 
     def __delete__(self, instance):
-        delattr(instance, self.name, self.default)
-
-    @property
-    def name(self):
-        return self._name
-
-    @name.setter
-    def name(self, value):
-        self._name = '_%s_value' % value
+        del self.registry[instance]
 
 
-class Boolean(Field):
+class Boolean(Item):
 
     def boolean_parser(self, value):
         return value.lower() in ('true', 'yes', 'on', '1')
@@ -40,7 +35,7 @@ class Boolean(Field):
             )
 
 
-class Float(Field):
+class Float(Item):
 
     def __init__(self, **kwargs):
         super(Float, self).__init__(
@@ -49,7 +44,7 @@ class Float(Field):
             )
 
 
-class Integer(Field):
+class Integer(Item):
 
     def __init__(self, **kwargs):
         super(Integer, self).__init__(
@@ -58,7 +53,7 @@ class Integer(Field):
             )
 
 
-class Long(Field):
+class Long(Item):
 
     def __init__(self, **kwargs):
         super(Long, self).__init__(
@@ -67,7 +62,7 @@ class Long(Field):
             )
 
 
-class Unicode(Field):
+class Unicode(Item):
 
     def __init__(self, **kwargs):
         super(Unicode, self).__init__(
@@ -76,19 +71,19 @@ class Unicode(Field):
             )
 
 
-class KeyPair(Field):
+class KeyPair(Item):
 
     def parser(self, value):
         k, v = value.split(self.delimiter)
-        v = self.field_type.parser(v)
+        v = self.item_type.parser(v)
         return (k, v)
 
     def __init__(self,
-            field_type=Unicode(),
+            item_type=Unicode(),
             delimiter=':',
             **kwargs
         ):
-        self.field_type = field_type
+        self.item_type = item_type
         self.delimiter = delimiter
         super(KeyPair, self).__init__(
                 parser=self.parser,
@@ -96,16 +91,16 @@ class KeyPair(Field):
             )
 
 
-class List(Field):
+class List(Item):
 
     def __init__(self,
-            field_type=Unicode(),
+            item_type=Unicode(),
             seperator=',',
             multiline=False,
             strip=True,
             **kwargs
         ):
-        self.field_type = field_type
+        self.item_type = item_type
         self.seperator = seperator
         self.multiline = multiline
         self.strip = strip
@@ -124,7 +119,7 @@ class List(Field):
             values = [v.strip() for v in values]
 
         return [
-            self.field_type.parser(v) for v in values
+            self.item_type.parser(v) for v in values
         ]
 
     def __get__(self, instance, value):
@@ -135,7 +130,7 @@ class List(Field):
         setattr(self, '_value', value)
 
 
-class PythonLiteral(Field):
+class PythonLiteral(Item):
 
     def __init__(self, **kwargs):
         super(PythonLiteral, self).__init__(
@@ -160,15 +155,11 @@ class SectionMeta(type):
 
     def __new__(mcs, name, bases, dict):
         instance = type.__new__(mcs, name, bases, dict)
-        fields = {}
+        items = {}
         for name, item in dict.iteritems():
-            try:
-                if isinstance(item, Field):
-                    fields[name] = item
-                    item.name = name
-            except TypeError:  # item is not a type
-                pass
-        instance.fields = fields
+            if isinstance(item, Item):
+                items[name] = item
+        instance.items = items
         return instance
 
 
@@ -176,10 +167,10 @@ class Section(DictAccessMixin):
 
     __metaclass__ = SectionMeta
 
-    def get_required_fields(self):
-        for name, field in self.fields.iteritems():
-            if field.required:
-                yield name, field
+    def get_required_items(self):
+        for name, item in self.items.iteritems():
+            if item.required:
+                yield name, item
 
 
 class Settings(DictAccessMixin):
@@ -220,10 +211,10 @@ class Settings(DictAccessMixin):
             for (name, value) in parser.items(section):
                 setattr(dest, name, value)
         for sname, section in settings.get_sections():
-            for fname, field in section.get_required_fields():
-                if fname not in dict(parser.items(sname)):
+            for iname, item in section.get_required_items():
+                if iname not in dict(parser.items(sname)):
                     raise ValueError(
-                        "Required field %r missing from section %r in ini file" % (fname, sname)
+                        "Required item %r missing from section %r in ini file" % (iname, sname)
                     )
         return settings
 
@@ -234,48 +225,48 @@ if __name__ == '__main__':
     class FunnelingSettings(Settings):
 
         class settings(Section):
-            field1 = Unicode()
-            field2 = Float()
-            field3 = Integer(default=5)
-            field4 = List(Unicode())
-            field5 = List(KeyPair())
+            item1 = Unicode()
+            item2 = Float()
+            item3 = Integer(default=5)
+            item4 = List(Unicode())
+            item5 = List(KeyPair())
 
         class extra(Section):
-            field = Integer()
+            item = Integer()
 
     settings = FunnelingSettings()
 
     # unicode
-    settings.settings.field1 = 4
-    assert settings.settings.field1 == '4'
+    settings.settings.item1 = 4
+    assert settings.settings.item1 == '4'
 
     # floats
-    settings.settings.field2 = 45
-    assert settings.settings.field2 == 45.0
-    settings.settings.field2 = '41.0'
-    assert settings.settings.field2 == 41.0
+    settings.settings.item2 = 45
+    assert settings.settings.item2 == 45.0
+    settings.settings.item2 = '41.0'
+    assert settings.settings.item2 == 41.0
 
     # default
-    assert settings.settings.field3 == 5
-    settings.settings.field3 = '70'
-    assert settings.settings.field3 == 70
+    assert settings.settings.item3 == 5
+    settings.settings.item3 = '70'
+    assert settings.settings.item3 == 70
 
     # two instances
     settings2 = FunnelingSettings()
-    settings2.settings.field2 = 12
-    assert settings2.settings.field2 == 12.0
-    assert settings.settings.field2 == 41.0
+    settings2.settings.item2 = 12
+    assert settings2.settings.item2 == 12.0
+    assert settings.settings.item2 == 41.0
 
     # lists
-    settings2.settings.field4 = 'foo,bar,baz'
-    assert settings2.settings.field4 == ['foo', 'bar', 'baz']
+    settings2.settings.item4 = 'foo,bar,baz'
+    assert settings2.settings.item4 == ['foo', 'bar', 'baz']
 
     # list of keypairs
-    settings2.settings.field5 = 'foo:bar,baz:quux'
-    assert settings2.settings.field5 == [('foo', 'bar'), ('baz', 'quux')]
+    settings2.settings.item5 = 'foo:bar,baz:quux'
+    assert settings2.settings.item5 == [('foo', 'bar'), ('baz', 'quux')]
 
     # dictionary access
-    assert settings2['settings']['field5'] == settings2.settings.field5
+    assert settings2['settings']['item5'] == settings2.settings.item5
 
     # whitespace fundamentals (WIP)
     setattr(settings2.settings, 'Miow Miow', 'Monkey Bot')
@@ -286,7 +277,7 @@ if __name__ == '__main__':
     class MoreTests(Settings):
 
         class settings(Section):
-            field1 = Unicode()
+            item1 = Unicode()
             integer = Integer()
             floatz = Float()
             lines = List(Float(), multiline=True)
@@ -300,7 +291,7 @@ if __name__ == '__main__':
     from StringIO import StringIO
     foo = StringIO('''
 [settings]
-field1=foo
+item1=foo
 integer=-23423
 floatz=423.2
 lines=23.3
@@ -317,7 +308,7 @@ What Up=dog
 what=huh?
 ''')
     settings = MoreTests.parse(foo)
-    assert settings.settings.field1 == 'foo'
+    assert settings.settings.item1 == 'foo'
     assert settings.settings.integer == -23423
     assert settings.settings.floatz == 423.2
     assert settings.settings.lines == [23.3, 32.3, 42.0]
@@ -328,7 +319,7 @@ what=huh?
     # python long
     assert settings.settings.a_long == 12345678901234567890L
 
-    # trying out extra fields that aren't defined
+    # trying out extra items that aren't defined
     assert settings.extra['what up'] == 'dog'
 
     # entirely undefined sections
@@ -350,5 +341,5 @@ provided = foo
         settings = Required.parse(foo)
         assert False
     except ValueError as e:
-        assert str(e) == "Required field 'required' missing from section 'settings' in ini file"
+        assert str(e) == "Required item 'required' missing from section 'settings' in ini file"
 
