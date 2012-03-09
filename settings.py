@@ -186,6 +186,10 @@ class Settings(DictAccessMixin):
                 pass
         return instance
 
+    def add_section(self, name):
+        setattr(self, name, Section())
+        return getattr(self, name)
+
     @classmethod
     def parse(cls, file):
         if isinstance(file, basestring):
@@ -195,10 +199,13 @@ class Settings(DictAccessMixin):
         parser.readfp(file)
         # iterate over ini and set values
         for section in parser.sections():
-            dest = getattr(settings, section)
+            dest = getattr(settings, section, None)
+            if dest is None:  # handle undelcared sections
+                dest = settings.add_section(section)
             for (name, value) in parser.items(section):
                 setattr(dest, name, value)
         return settings
+
 
 
 if __name__ == '__main__':
@@ -284,6 +291,9 @@ a_long=12345678901234567890
 
 [extra]
 What Up=dog
+
+[undeclared]
+what=huh?
 ''')
     settings = MoreTests.parse(foo)
     assert settings.settings.field1 == 'foo'
@@ -299,3 +309,6 @@ What Up=dog
 
     # trying out extra fields that aren't defined
     assert settings.extra['what up'] == 'dog'
+
+    # entirely undefined sections
+    assert settings.undeclared.what == 'huh?'
