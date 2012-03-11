@@ -93,7 +93,20 @@ what=huh?
 
     def test_list_parsing(self):
         self.conf1.settings.item4 = 'foo,bar,baz'
-        assert self.conf1.settings.item4 == ['foo', 'bar', 'baz']
+        self.assertEquals(
+                ['foo', 'bar', 'baz'],
+                self.conf1.settings.item4
+            )
+
+    def test_list_two_instances_no_shared_state(self):
+        conf3 = SomeSettings()
+        conf3.settings.item4 = '1,2'
+        self.conf1.settings.item4 = 'foo,bar,baz'
+        self.assertNotEquals(
+                conf3.settings.item4,
+                self.conf1.settings.item4
+            )
+
 
     def test_list_of_keypairs(self):
         self.conf1.settings.item5 = 'foo:bar,baz:quux'
