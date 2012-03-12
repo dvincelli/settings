@@ -114,13 +114,6 @@ class List(Item):
             self.item_type.parser(v) for v in values
         ]
 
-    def __get__(self, instance, value):
-        return getattr(self, '_value', [])
-
-    def __set__(self, instance, value):
-        value = self.parser(value)
-        setattr(self, '_value', value)
-
 
 class PythonLiteral(Item):
 
