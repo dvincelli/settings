@@ -24,12 +24,16 @@ class Item(object):
 
 class Boolean(Item):
 
-    def boolean_parser(self, value):
-        return value.lower() in ('true', 'yes', 'on', '1')
+    def parser(self, value):
+        if value.lower() in ('true', 'yes', 'on', '1'):
+            return True
+        elif value.lower() in ('false', 'no', 'off', '0'):
+            return False
+        raise ValueError("%r is not a valid boolean" % value)
 
     def __init__(self, **kwargs):
         super(Boolean, self).__init__(
-                parser=self.boolean_parser,
+                parser=self.parser,
                 **kwargs
             )
 
