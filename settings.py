@@ -148,7 +148,7 @@ class SectionMeta(type):
         for name, item in dict.iteritems():
             if isinstance(item, Item):
                 items[name] = item
-        instance.items = items
+        instance._items = items
         return instance
 
 
@@ -156,10 +156,43 @@ class Section(DictAccessMixin):
 
     __metaclass__ = SectionMeta
 
-    def get_required_items(self):
-        for name, item in self.items.iteritems():
-            if item.required:
-                yield name, item
+
+def items(section):
+    for name, var in vars(section.__class__).iteritems():
+        if isinstance(var, Item):
+            yield name, var
+
+
+def sections(settings):
+    for name, var in vars(settings).iteritems():
+        if isinstance(var, Section):
+            yield name, var
+
+
+def parse(settings, file):
+        if isinstance(file, basestring):
+            file = open(file)
+        parser = SafeConfigParser()
+        parser.readfp(file)
+
+        # iterate over ini and set values
+        for section_name in parser.sections():
+            target_section = getattr(settings, section_name, None)
+            if target_section is None:  # handle undelcared sections
+                setattr(settings, section_name, Section())
+                target_section = getattr(settings, section_name)
+            for (item_name, value) in parser.items(section_name):
+                setattr(target_section, item_name, value)
+
+        for section_name, section in sections(settings):
+            section_items = dict(parser.items(section_name))
+            for item_name, item in items(section):
+                if item.required and item_name not in section_items:
+                    raise ValueError(
+                        "Required item %r missing from section %r in ini file"\
+                                % (item_name, section_name)
+                    )
+        return settings
 
 
 class Settings(DictAccessMixin):
@@ -175,35 +208,3 @@ class Settings(DictAccessMixin):
             except TypeError:  # section is not a type
                 pass
         return instance
-
-    def add_section(self, name):
-        setattr(self, name, Section())
-        return getattr(self, name)
-
-    def get_sections(self):
-        for name, section in vars(self).iteritems():
-            if isinstance(section, Section):
-                yield name, section
-
-    @classmethod
-    def parse(cls, file):
-        if isinstance(file, basestring):
-            file = open(file)
-        settings = cls()
-        parser = SafeConfigParser()
-        parser.readfp(file)
-        # iterate over ini and set values
-        for section in parser.sections():
-            dest = getattr(settings, section, None)
-            if dest is None:  # handle undelcared sections
-                dest = settings.add_section(section)
-            for (name, value) in parser.items(section):
-                setattr(dest, name, value)
-        for sname, section in settings.get_sections():
-            for iname, item in section.get_required_items():
-                if iname not in dict(parser.items(sname)):
-                    raise ValueError(
-                        "Required item %r missing from section %r in ini file"\
-                                % (iname, sname)
-                    )
-        return settings

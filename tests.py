@@ -9,7 +9,8 @@ from settings import (
         PythonLiteral,
         Section,
         Settings,
-        Unicode
+        Unicode,
+        parse
     )
 from StringIO import StringIO
 
@@ -49,7 +50,7 @@ class SettingsTests(unittest.TestCase):
     def setUp(self):
         self.conf1 = SomeSettings()
         self.conf2 = MoreSettings()
-        self.conf2 = self.conf2.parse(StringIO('''
+        self.conf2 = parse(MoreSettings(), StringIO('''
 [settings]
 item1=foo
 integer=-23423
@@ -173,4 +174,4 @@ what=huh?
 provided = foo
         ''')
 
-        self.assertRaises(ValueError, Required.parse, ini)
+        self.assertRaises(ValueError, parse, Required(), ini)
