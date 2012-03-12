@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 
-from distutils.core import setup
+try:
+    from setuptools import setup
+except ImportError:
+    from distutils.core import setup
 
 setup(
     name='settings',
@@ -10,4 +13,5 @@ setup(
     author_email='david@freshbooks.com',
     url='https://github.com/ocim/settings',
     py_modules = ['settings'],
+    test_suite = 'tests'
 )

@@ -22,6 +22,8 @@ class SomeSettings(Settings):
         item3 = Integer(default=5)
         item4 = List(Unicode())
         item5 = List(KeyPair())
+        int = Integer()
+        long = Long()
 
     class extra(Section):
         item = Integer()
@@ -69,13 +71,26 @@ what=huh?
     def test_Unicode_casts_to_unicode(self):
         self.conf1.settings.item1 = 4
         self.assertEquals(u'4', self.conf1.settings.item1)
+        self.assertEquals(unicode, type(self.conf1.settings.item1))
 
     def test_Float_casts_to_float(self):
         self.conf1.settings.item2 = 45
         self.assertEquals(45.0, self.conf1.settings.item2)
+        self.assertEquals(float, type(self.conf1.settings.item2))
 
         self.conf1.settings.item2 = '41.0'
         self.assertEquals(41.0, self.conf1.settings.item2)
+        self.assertEquals(float, type(self.conf1.settings.item2))
+
+    def test_Integer_casts_to_int(self):
+        self.conf1.settings.int = '10'
+        self.assertTrue(10 is self.conf1.settings.int)
+        self.assertEquals(int, type(self.conf1.settings.int))
+
+    def test_Long_casts_to_long(self):
+        self.conf1.settings.long = '100L'
+        self.assertEquals(type(100L), type(self.conf1.settings.long))
+        self.assertEquals(100L, self.conf1.settings.long)
 
     def test_default(self):
         self.assertEquals(5, self.conf1.settings.item3)
