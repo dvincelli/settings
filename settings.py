@@ -169,21 +169,45 @@ def sections(settings):
             yield name, var
 
 
+def settings_to_dict(settings):
+    return dict([(name, section_to_dict(section)) for
+        name, section in section(settings)])
+
+
+def section_to_dict(section):
+    return dict([(name, getattr(section, name)) for
+        name, _ in items(section)])
+
+
 def parse(settings, file):
         if isinstance(file, basestring):
             file = open(file)
+
         parser = SafeConfigParser()
         parser.readfp(file)
 
         # iterate over ini and set values
         for section_name in parser.sections():
+            # the actual section instance on the settings instance
             target_section = getattr(settings, section_name, None)
+
+            # if the section instance doesn't exist, create it
             if target_section is None:  # handle undelcared sections
                 setattr(settings, section_name, Section())
                 target_section = getattr(settings, section_name)
+
+            # the declared items on the nested Settings class
+            declared_items = dict(items(target_section))
+            # set the items and values from the ini files onto the
+            # settings items
             for (item_name, value) in parser.items(section_name):
+                # if the item is undeclared, declare it as a regular Item
+                if item_name not in declared_items:
+                    setattr(target_section.__class__, item_name, Item())
+                # finally actually set the value
                 setattr(target_section, item_name, value)
 
+        # assert required fields in the settings instances
         for section_name, section in sections(settings):
             section_items = dict(parser.items(section_name))
             for item_name, item in items(section):
